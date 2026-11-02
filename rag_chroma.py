@@ -47,29 +47,45 @@ if collection.count() == 0:
 else:
     print("✅ 发现已存在的知识库，跳过建库步骤。\n")
 
-# ================= 阶段二：检索与问答 =================
-question = "税务局查研发的时候，主要看哪些核心要素？"
-print(f"你的问题是：{question}")
+# ================= 阶段二：多轮对话与问答 =================
+# 建立一个列表，用来保存聊天记录（记忆）
+messages = [
+    {"role": "system", "content": "你是一个专业的财税AI助手，请严格根据我提供的资料回答问题。"}
+]
 
-# 1. 把问题变成向量
-q_res = client_embed.embeddings.create(model="embedding-3", input=question)
-q_vector = q_res.data[0].embedding
+print("🤖 AI 财税助手已上线！输入 '退出' 即可结束对话。\n")
 
-# 2. 去 ChromaDB 里搜（这行代码代替了昨天的 for 循环算距离）
-results = collection.query(
-    query_embeddings=[q_vector],
-    n_results=1  # 只要最相似的一块
-)
+while True:
+    # 1. 等待用户输入问题
+    question = input("\n👤 你问：")
+    if question == "退出":
+        print("👋 再见！")
+        break
 
-best_chunk = results['documents'][0][0]
-print(f"\n🔍 从数据库匹配到的段落：\n{best_chunk}\n")
+    # 2. 把问题变成向量，去数据库里找资料
+    q_res = client_embed.embeddings.create(model="embedding-3", input=question)
+    q_vector = q_res.data[0].embedding
 
-# 3. 让 DeepSeek 结合资料生成回答
-print("🤖 正在生成回答...")
-prompt = f"请根据以下背景资料回答我的问题。\n\n资料：{best_chunk}\n\n问题：{question}"
-response = client_chat.chat.completions.create(
-    model="deepseek-chat",
-    messages=[{"role": "user", "content": prompt}]
-)
+    results = collection.query(
+        query_embeddings=[q_vector],
+        n_results=1
+    )
+    best_chunk = results['documents'][0][0]
 
-print(f"\n💡 最终回答：\n{response.choices[0].message.content}")
+    # 3. 把当前问题和找到的资料，加入记忆列表
+    # 巧妙之处：把查到的背景资料，悄悄拼接在用户的问题前面发给 AI
+    current_prompt = f"背景资料：{best_chunk}\n\n用户问题：{question}"
+    messages.append({"role": "user", "content": current_prompt})
+
+    # 4. 呼叫 DeepSeek 生成回答
+    print("🤖 AI 正在思考...")
+    response = client_chat.chat.completions.create(
+        model="deepseek-chat",
+        messages=messages  # 注意这里：把包含历史记录的所有消息发给它
+    )
+
+    # 5. 拿到回答，打印出来，并把 AI 的回答也存入记忆
+    answer = response.choices[0].message.content
+    print(f"\n💡 AI 回答：\n{answer}")
+    
+    messages.append({"role": "assistant", "content": answer})
