@@ -18,8 +18,8 @@ if st.button("开始绘画") and prompt:
     }
     payload_str = json.dumps(payload_dict, ensure_ascii=True) 
     
-    api_key = os.getenv("ZHIPU_API_KEY")
-    url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
+    # 加上 .strip() 去掉前后可能带有的空格、换行符等隐形字符
+api_key = os.getenv("ZHIPU_API_KEY").strip()
     
     headers = {
         "Authorization": f"Bearer {api_key}",
