@@ -1,0 +1,36 @@
+import time
+import requests
+
+# 以即梦逆向 API 或 MiniMax 为例（需替换为你的真实凭证和 endpoint）
+API_KEY = "你的_API_Key_或_sessionid"
+BASE_URL = "你的接口地址"  # 例如 MiniMax: https://api.minimax.cn/v1
+
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+# 1. 提交任务
+def submit_task(prompt):
+    payload = {"prompt": prompt, "model": "jimeng-video-3.0"}  # 即梦示例
+    response = requests.post(f"{BASE_URL}/videos/generations", headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()["task_id"]
+
+# 2. 轮询状态
+def poll_task(task_id, max_attempts=20, interval=10):
+    url = f"{BASE_URL}/tasks/{task_id}"
+    for attempt in range(max_attempts):
+        print(f"第 {attempt + 1} 次查询状态...")
+        resp = requests.get(url, headers=headers).json()
+        status = resp.get("status")
+        if status in ["Success", "done"]:
+            return resp.get("video_url")
+        elif status == "Fail":
+            raise Exception(f"生成失败: {resp}")
+        time.sleep(interval)  # 等待 interval 秒后重试[reference:7]
+    raise TimeoutError("任务超时，视频可能仍在排队")
+
+# 3. 主流程
+if __name__ == "__main__":
+    task_id = submit_task("一只戴着宇航员头盔的柴犬在月球上漫步")
+    print(f"任务已提交，task_id: {task_id}")
+    video_url = poll_task(task_id)
+    print(f"🎉 视频生成成功：{video_url}")
