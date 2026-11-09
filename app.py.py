@@ -1,5 +1,9 @@
-import streamlit as st
 import os
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['LANG'] = 'C.UTF-8'
+
+# 下面是你原来的代码
+import streamlit as st
 import json
 import urllib.request
 import urllib.error
@@ -28,13 +32,10 @@ if st.button("开始绘画") and prompt:
                 "prompt": prompt
             }
             
-            # 使用内置库进行绝对安全的 UTF-8 编码
+            # 确保提取出来的数据是 utf-8
             data = json.dumps(payload).encode('utf-8')
-            
-            # 构建请求
             req = urllib.request.Request(url, data=data, headers=headers, method='POST')
             
-            # 发送请求并读取结果
             with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode('utf-8'))
             
