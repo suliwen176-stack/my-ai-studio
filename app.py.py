@@ -1,7 +1,8 @@
 import streamlit as st
 import os
 import json
-import requests
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,28 +18,32 @@ if st.button("开始绘画") and prompt:
             api_key = os.getenv("ZHIPU_API_KEY")
             url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
             
-            payload_dict = {
-                "model": "cogview-3-flash",
-                "prompt": prompt
-            }
-            
-            # 【核心修复】：ensure_ascii=True 会把中文转成 \uXXXX 格式的英文字符
-            payload_str = json.dumps(payload_dict, ensure_ascii=True) 
-            payload_bytes = payload_str.encode('utf-8')
-            
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
             
-            response = requests.post(url, headers=headers, data=payload_bytes)
-            response.raise_for_status()
+            payload = {
+                "model": "cogview-3-flash",
+                "prompt": prompt
+            }
             
-            data = response.json()
-            image_url = data['data'][0]['url']
+            # 使用内置库进行绝对安全的 UTF-8 编码
+            data = json.dumps(payload).encode('utf-8')
+            
+            # 构建请求
+            req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+            
+            # 发送请求并读取结果
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode('utf-8'))
+            
+            image_url = result['data'][0]['url']
             
             st.success("🎉 画作完成！")
             st.image(image_url, caption=prompt)
             
+        except urllib.error.HTTPError as e:
+            st.error(f"网络请求失败，状态码：{e.code}，详情：{e.read().decode('utf-8')}")
         except Exception as e:
             st.error(f"生成失败了，报错信息：{e}")
