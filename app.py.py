@@ -17,20 +17,20 @@ if st.button("开始绘画") and prompt:
             api_key = os.getenv("ZHIPU_API_KEY")
             url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
             
-            # 核心修复：手动把中文转成 UTF-8 编码的字节，不让 requests 自动瞎猜
             payload_dict = {
                 "model": "cogview-3-flash",
                 "prompt": prompt
             }
-            payload_str = json.dumps(payload_dict, ensure_ascii=False)
+            
+            # 【核心修复】：ensure_ascii=True 会把中文转成 \uXXXX 格式的英文字符
+            payload_str = json.dumps(payload_dict, ensure_ascii=True) 
             payload_bytes = payload_str.encode('utf-8')
             
             headers = {
                 "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json; charset=utf-8"
+                "Content-Type": "application/json"
             }
             
-            # 使用 data= 发送已经转好的字节流
             response = requests.post(url, headers=headers, data=payload_bytes)
             response.raise_for_status()
             
