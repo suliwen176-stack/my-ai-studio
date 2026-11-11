@@ -62,7 +62,7 @@ with tab1:
                             with urllib.request.urlopen(req) as response:
                                 result = json.loads(response.read().decode('utf-8'))
                                 img_url = result['data'][0]['url']
-                                st.image(img_url, use_column_width=True)
+                                st.image(img_url, use_container_width=True)
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 生成失败")
 
@@ -83,7 +83,7 @@ with tab2:
                 with urllib.request.urlopen(req) as response:
                     result = json.loads(response.read().decode('utf-8'))
                     img_url = result['data'][0]['url']
-                    st.image(img_url, use_column_width=True)
+                    st.image(img_url, use_container_width=True)
             except Exception as e:
                 st.error(f"生成失败：{e}")
 
@@ -133,7 +133,7 @@ with tab3:
                             img_url = result['data'][0]['url']
                             
                             # 显示图片
-                            st.image(img_url, use_column_width=True)
+                            st.image(img_url, use_container_width=True)
                             
                             # 添加下载按钮（直接下载图片链接）
                             st.markdown(f"[📥 点击下载此张图片]({img_url})")
