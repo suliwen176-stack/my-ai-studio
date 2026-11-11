@@ -10,15 +10,12 @@ st.set_page_config(page_title="AI 短剧导演工作台", page_icon="🎬", layo
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 load_dotenv()
 
-# --- 初始化模型 ---
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 
-# --- 侧边栏 ---
 with st.sidebar:
     st.title("🎬 导演工作台")
     st.info("粘贴剧本拆解分镜，或直接生成视频。")
 
-# --- 主界面标签页 ---
 tab1, tab2, tab3 = st.tabs(["📝 剧本转分镜漫剧", "🎨 单张快速绘图", "🎥 AI 视频生成"])
 
 # ================= 功能一：剧本转漫剧 =================
@@ -143,7 +140,7 @@ with tab3:
                             st.session_state.video_task_id = None
                         else:
                             st.warning(f"当前状态：{task_status}，请稍后再试...")
-                                except Exception as e:
+                except Exception as e:
                     st.error(f"查询失败：{e}")
 
         if st.session_state.video_status == "SUCCESS" and st.session_state.video_url:
