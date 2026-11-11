@@ -6,37 +6,76 @@ import urllib.request
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# ================= 1. 页面配置与炫酷背景 =================
 st.set_page_config(page_title="AI 短剧导演工作台", page_icon="🎬", layout="wide")
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 load_dotenv()
 
+# 注入自定义 CSS 背景（深色古风/科技感背景）
+page_bg_img = """
+<style>
+[data-testid="stAppViewContainer"] {
+    background-image: url("https://images.unsplash.com/photo-1538370965046-79c0d6907d47?q=80&w=2069&auto=format&fit=crop");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+[data-testid="stHeader"] {
+    background: rgba(0,0,0,0);
+}
+[data-testid="stSidebar"] {
+    background-color: rgba(26, 28, 36, 0.8);
+}
+</style>
+"""
+st.markdown(page_bg_img, unsafe_allow_html=True)
+
+# --- 初始化模型 ---
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 
+# --- 侧边栏 ---
 with st.sidebar:
     st.title("🎬 导演工作台")
     st.info("粘贴剧本拆解分镜，或直接生成视频。")
+    st.markdown("---")
+    st.caption("当前版本：V2.0 (商业排版版)")
 
+# --- 主界面标签页 ---
 tab1, tab2, tab3 = st.tabs(["📝 剧本转分镜漫剧", "🎨 单张快速绘图", "🎥 AI 视频生成"])
 
-# ================= 功能一：剧本转漫剧 =================
+# ================= 功能一：剧本转漫剧（含画风与文案） =================
 with tab1:
-    st.header("剧本转分镜")
+    st.header("剧本转分镜漫剧")
     script_text = st.text_area("请粘贴一段剧本（建议先输入 3-5 句测试）：", height=150)
+    
+    # 新增：画风选择器
+    style = st.selectbox(
+        "选择画面风格",
+        ["古风水墨", "赛博朋克", "二次元动漫", "3D写实"]
+    )
     
     if st.button("开始拆解并绘图", type="primary"):
         if not script_text:
             st.warning("请先输入剧本！")
         else:
             with st.status("导演正在拆解剧本...", expanded=True) as status:
-                prompt = f"""你是一个电影分镜师。将以下剧本拆解为分镜。严格按照 JSON 数组格式输出：
-                [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词"}}]
+                # 让大模型同时返回分镜和推文文案
+                prompt = f"""你是一个专业的电影分镜师和自媒体运营。
+                请将以下剧本拆解为分镜，并写一段适合发小红书/抖音的推文。
+                严格按照以下 JSON 格式输出，不要输出任何其他文字：
+                {{
+                    "storyboard": [{{"shot_id": 1, "visual_prompt": "英文画面描述，强调 {style} 风格", "dialogue": "台词"}}],
+                    "copywriting": "小红书爆款文案，包含 emoji 和标签"
+                }}
                 剧本：{script_text}"""
                 
                 res = client_chat.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}])
                 
                 try:
                     clean_json = res.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-                    storyboard = json.loads(clean_json)
+                    data = json.loads(clean_json)
+                    storyboard = data.get("storyboard", [])
+                    copywriting = data.get("copywriting", "暂无文案生成")
                     status.update(label=f"✅ 拆解完成！共 {len(storyboard)} 个镜头。", state="complete")
                 except Exception as e:
                     st.error(f"剧本拆解失败，格式错误：{e}")
@@ -56,7 +95,9 @@ with tab1:
                             api_key = os.getenv("ZHIPU_API_KEY").strip()
                             url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
                             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-                            payload = {"model": "cogview-3-flash", "prompt": shot['visual_prompt']}
+                            # 把画风也传给生图模型
+                            final_prompt = f"{shot['visual_prompt']}, {style} style"
+                            payload = {"model": "cogview-3-flash", "prompt": final_prompt}
                             
                             req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
                             with urllib.request.urlopen(req) as response:
@@ -65,6 +106,11 @@ with tab1:
                                 st.image(img_url, use_container_width=True)
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 生成失败")
+
+            # 新增：展示推文文案
+            st.write("---")
+            st.write("### 📝 一键复制推文文案")
+            st.text_area("复制以下文案去发布：", value=copywriting, height=150)
 
 # ================= 功能二：单张快速绘图 =================
 with tab2:
@@ -87,7 +133,7 @@ with tab2:
             except Exception as e:
                 st.error(f"生成失败：{e}")
 
-# ================= 功能三：图文短剧一键生成器 =================
+# ================= 功能三：图文短剧一键生成器（原第三页） =================
 with tab3:
     st.header("图文短剧一键生成")
     st.info("💡 视频 API 需要实名认证。本模块将直接生成高质量的图文小说推文，可一键下载发布！")
@@ -98,7 +144,6 @@ with tab3:
         if not story_prompt:
             st.warning("请先输入剧本！")
         else:
-            # 1. 拆分镜
             with st.status("导演正在拆解剧本...", expanded=True) as status:
                 prompt = f"""你是一个电影分镜师。将以下剧本拆解为分镜。严格按照 JSON 数组格式输出：
                 [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词"}}]
@@ -114,10 +159,7 @@ with tab3:
                     st.error(f"剧本拆解失败：{e}")
                     st.stop()
 
-            # 2. 循环生成图片
             st.write("### 🎬 短剧图文画面")
-            
-            # 为了排版好看，我们可以逐行显示
             for i, shot in enumerate(storyboard):
                 st.markdown(f"#### 镜头 {shot['shot_id']} - {shot.get('dialogue', '')}")
                 with st.spinner(f"正在绘制镜头 {shot['shot_id']}..."):
@@ -132,10 +174,7 @@ with tab3:
                             result = json.loads(response.read().decode('utf-8'))
                             img_url = result['data'][0]['url']
                             
-                            # 显示图片
                             st.image(img_url, use_container_width=True)
-                            
-                            # 添加下载按钮（直接下载图片链接）
                             st.markdown(f"[📥 点击下载此张图片]({img_url})")
                     except Exception as e:
                         st.error(f"镜头 {shot['shot_id']} 生成失败")
