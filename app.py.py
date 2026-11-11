@@ -87,68 +87,55 @@ with tab2:
             except Exception as e:
                 st.error(f"生成失败：{e}")
 
-# ================= 功能三：AI 视频生成（商业架构版） =================
+# ================= 功能三：图文短剧一键生成器 =================
 with tab3:
-    st.header("AI 视频生成（商业架构版）")
+    st.header("图文短剧一键生成")
+    st.info("💡 视频 API 需要实名认证。本模块将直接生成高质量的图文小说推文，可一键下载发布！")
     
-    if "video_task_id" not in st.session_state:
-        st.session_state.video_task_id = None
-    if "video_status" not in st.session_state:
-        st.session_state.video_status = None
-    if "video_url" not in st.session_state:
-        st.session_state.video_url = None
-
-    video_prompt = st.text_input("请输入视频画面描述：", placeholder="例如：古风宅院，大雪纷飞...", disabled=(st.session_state.video_task_id is not None))
+    story_prompt = st.text_area("请输入短剧剧本（建议 3-5 句）：", placeholder="例如：古风宅院，大雪纷飞...")
     
-    if st.button("1. 提交生成任务", type="primary", key="btn_submit_video") and video_prompt:
-        with st.spinner("正在提交任务到云端..."):
-            try:
-                api_key = os.getenv("ZHIPU_API_KEY").strip()
-                url = "https://open.bigmodel.cn/api/paas/v4/videos/generations"
-                headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-                payload = {"model": "cogvideox-flash", "prompt": video_prompt}
+    if st.button("开始生成图文短剧", type="primary", key="btn_story"):
+        if not story_prompt:
+            st.warning("请先输入剧本！")
+        else:
+            # 1. 拆分镜
+            with st.status("导演正在拆解剧本...", expanded=True) as status:
+                prompt = f"""你是一个电影分镜师。将以下剧本拆解为分镜。严格按照 JSON 数组格式输出：
+                [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词"}}]
+                剧本：{story_prompt}"""
                 
-                req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
-                with urllib.request.urlopen(req) as response:
-                    result = json.loads(response.read().decode('utf-8'))
-                    st.session_state.video_task_id = result.get("id")
-                    st.session_state.video_status = "PENDING"
-                    st.success(f"任务提交成功！Task ID: {st.session_state.video_task_id}")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"提交失败：{e}")
-
-    if st.session_state.video_task_id:
-        st.info(f"当前任务 ID：{st.session_state.video_task_id}")
-        
-        if st.button("2. 查询渲染进度", type="secondary"):
-            with st.spinner("正在向云端查询..."):
+                res = client_chat.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}])
+                
                 try:
-                    api_key = os.getenv("ZHIPU_API_KEY").strip()
-                    status_url = f"https://open.bigmodel.cn/api/paas/v4/async-result/{st.session_state.video_task_id}"
-                    status_req = urllib.request.Request(status_url, headers={"Authorization": f"Bearer {api_key}"})
-                    
-                    with urllib.request.urlopen(status_req) as context_res:
-                        status_data = json.loads(context_res.read().decode('utf-8'))
-                        task_status = status_data.get("task_status")
-                        st.session_state.video_status = task_status
-                        
-                        if task_status == "SUCCESS":
-                            st.session_state.video_url = status_data["video_result"][0]["url"]
-                        elif task_status == "FAIL":
-                            st.error("视频生成失败了，请重试。")
-                            st.session_state.video_task_id = None
-                        else:
-                            st.warning(f"当前状态：{task_status}，请稍后再试...")
+                    clean_json = res.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+                    storyboard = json.loads(clean_json)
+                    status.update(label=f"✅ 拆解完成！共 {len(storyboard)} 个镜头。", state="complete")
                 except Exception as e:
-                    st.error(f"查询失败：{e}")
+                    st.error(f"剧本拆解失败：{e}")
+                    st.stop()
 
-        if st.session_state.video_status == "SUCCESS" and st.session_state.video_url:
-            st.success("🎉 视频渲染完成！")
-            st.video(st.session_state.video_url)
+            # 2. 循环生成图片
+            st.write("### 🎬 短剧图文画面")
             
-            if st.button("生成下一个视频"):
-                st.session_state.video_task_id = None
-                st.session_state.video_status = None
-                st.session_state.video_url = None
-                st.rerun()
+            # 为了排版好看，我们可以逐行显示
+            for i, shot in enumerate(storyboard):
+                st.markdown(f"#### 镜头 {shot['shot_id']} - {shot.get('dialogue', '')}")
+                with st.spinner(f"正在绘制镜头 {shot['shot_id']}..."):
+                    try:
+                        api_key = os.getenv("ZHIPU_API_KEY").strip()
+                        url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
+                        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                        payload = {"model": "cogview-3-flash", "prompt": shot['visual_prompt']}
+                        
+                        req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+                        with urllib.request.urlopen(req) as response:
+                            result = json.loads(response.read().decode('utf-8'))
+                            img_url = result['data'][0]['url']
+                            
+                            # 显示图片
+                            st.image(img_url, use_column_width=True)
+                            
+                            # 添加下载按钮（直接下载图片链接）
+                            st.markdown(f"[📥 点击下载此张图片]({img_url})")
+                    except Exception as e:
+                        st.error(f"镜头 {shot['shot_id']} 生成失败")
