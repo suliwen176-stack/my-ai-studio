@@ -16,29 +16,23 @@ custom_css = """
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stDecoration"] {visibility: hidden !important;}
-    [data-testid="stStatusWidget"] {visibility: hidden !important;} /* 隐藏右下角 Manage app */
+    [data-testid="stStatusWidget"] {visibility: hidden !important;}
     
     /* 纯黑背景 */
     .stApp {
         background-color: #050505;
         color: #E0E0E0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    
-    /* 侧边栏隐藏与美化 */
-    [data-testid="stSidebar"] {
-        background-color: #0A0A0A;
-        border-right: 1px solid #1A1A1A;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
     /* 主区域居中与边距 */
     .block-container {
-        padding-top: 5rem;
+        padding-top: 3rem;
         padding-bottom: 6rem;
         max-width: 800px;
     }
     
-    /* 悬浮输入框（即梦同款发光胶囊） */
+    /* 悬浮输入框 */
     [data-testid="stChatInput"] {
         background-color: #141414 !important;
         border: 1px solid #2A2A2A !important;
@@ -53,7 +47,7 @@ custom_css = """
         box-shadow: 0 4px 40px rgba(255, 255, 255, 0.1) !important;
     }
     
-    /* 对话气泡美化（去掉默认的气泡底色，只留文字） */
+    /* 对话气泡美化 */
     [data-testid="stChatMessage"] {
         background-color: transparent !important;
         padding: 10px 0 !important;
@@ -70,22 +64,32 @@ custom_css = """
         transform: translateY(-2px);
     }
     
-    /* 隐藏单选框的丑陋圆圈，变成侧边栏高级菜单 */
+    /* 把单选框 (Radio) 变成即梦同款的高级切换按钮 */
+    div[role="radiogroup"] {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
     div[role="radiogroup"] > label > div:first-child {
-        display: none;
+        display: none; /* 隐藏默认圆圈 */
     }
     div[role="radiogroup"] > label {
         background-color: #141414;
-        padding: 8px 15px;
-        border-radius: 12px;
-        margin-bottom: 8px;
-        border: 1px solid #222;
+        padding: 8px 20px;
+        border-radius: 20px;
+        margin: 0 10px;
+        border: 1px solid #2A2A2A;
         cursor: pointer;
         transition: all 0.2s ease;
     }
     div[role="radiogroup"] > label:hover {
         border-color: #555;
-        background-color: #1A1A1A;
+    }
+    /* 选中状态的样式 */
+    div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: #FFFFFF;
+        color: #000000;
+        border-color: #FFFFFF;
     }
 </style>
 """
@@ -94,34 +98,23 @@ st.markdown(custom_css, unsafe_allow_html=True)
 load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 
-# ================= 2. 侧边栏（极简控制台） =================
-with st.sidebar:
-    st.markdown("<h3 style='color:#FAFAFA; margin-bottom: 20px;'>✨ AI Studio</h3>", unsafe_allow_html=True)
-    
-    # 模式选择
-    mode = st.radio("当前模式", ["🎬 图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
-    
-    st.markdown("---")
-    # 新建对话按钮
-    if st.button("➕ 新建对话", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-        
-    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-    st.caption("v3.0 极简版")
+# ================= 2. 顶部控制栏 =================
+# 把模式切换居中，方便点击
+mode = st.radio("模式切换", ["🎬 图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
+
+# 初始化记忆状态
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 # ================= 3. 主界面对话流 =================
-# 首屏欢迎语（如果没有任何对话时显示）
-if not st.session_state.get("messages"):
+# 如果没对话，显示极简欢迎语
+if not st.session_state.messages:
     st.markdown("""
         <div style='text-align: center; margin-top: 10vh; margin-bottom: 10vh;'>
             <h1 style='color: #FFFFFF; font-weight: 300; font-size: 2.5rem; letter-spacing: 2px;'>让想象触手可及</h1>
             <p style='color: #888; font-size: 1.1rem;'>在下方输入您的想法，AI 将为您绘制画面</p>
         </div>
     """, unsafe_allow_html=True)
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 # 渲染历史记录
 for msg in st.session_state.messages:
@@ -138,12 +131,10 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("输入想法、剧本或画面描述，和 Agent 一起创作...")
 
 if user_input:
-    # 记录用户输入
     st.session_state.messages.append({"role": "user", "type": "text", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI 处理逻辑
     with st.chat_message("assistant"):
         if mode == "🎨 单张绘图":
             with st.spinner("AI 正在绘制..."):
