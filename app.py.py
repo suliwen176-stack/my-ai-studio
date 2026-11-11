@@ -143,8 +143,8 @@ with tab3:
                             st.session_state.video_task_id = None
                         else:
                             st.warning(f"当前状态：{task_status}，请稍后再试...")
-                except Exception as e:
-                st.error(f"查询失败：{e}")
+                                except Exception as e:
+                    st.error(f"查询失败：{e}")
 
         if st.session_state.video_status == "SUCCESS" and st.session_state.video_url:
             st.success("🎉 视频渲染完成！")
