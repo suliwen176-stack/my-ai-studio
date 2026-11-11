@@ -5,43 +5,66 @@ import urllib.request
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# ================= 1. 注入即梦风 CSS =================
-st.set_page_config(page_title="AI 创作工作台", page_icon="✨", layout="wide")
+# ================= 1. 注入极致即梦风 CSS =================
+st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
 
 custom_css = """
 <style>
+    /* 暴力隐藏所有开发者的丑陋标签 */
     #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
+    header {visibility: hidden !important;}
     footer {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
     
+    /* 纯黑背景 */
     .stApp {
-        background-color: #000000;
+        background-color: #0E0E0E;
         color: #E0E0E0;
     }
     
+    /* 侧边栏样式 */
     [data-testid="stSidebar"] {
-        background-color: #111111;
+        background-color: #161616;
         border-right: 1px solid #333;
     }
     
-    /* 输入框居中最大宽度 */
+    /* 优化主区域边距，让输入框更贴近底部 */
     .block-container {
-        padding-top: 3rem;
-        padding-bottom: 6rem;
-        max-width: 900px;
+        padding-top: 2rem;
+        padding-bottom: 5rem;
+        max-width: 800px;
     }
     
+    /* 悬浮输入框（即梦同款） */
     [data-testid="stChatInput"] {
         background-color: #1E1E1E !important;
         border: 1px solid #444 !important;
-        border-radius: 25px !important;
+        border-radius: 20px !important;
         padding: 10px 20px !important;
         color: white !important;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.1) !important;
     }
     
+    /* 去掉图片默认边框，加圆角和阴影 */
     .stImage img {
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    
+    /* 隐藏单选框的圆圈，变成文字按钮样式（如果不放侧边栏的话） */
+    div[role="radiogroup"] > label > div:first-child {
+        display: none;
+    }
+    div[role="radiogroup"] > label {
+        background-color: #1E1E1E;
+        padding: 5px 15px;
+        border-radius: 15px;
+        margin-right: 10px;
+        border: 1px solid #333;
+        cursor: pointer;
+    }
+    div[role="radiogroup"] > label:hover {
+        border-color: #00F0FF;
     }
 </style>
 """
@@ -50,18 +73,23 @@ st.markdown(custom_css, unsafe_allow_html=True)
 load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 
-# ================= 2. 主界面 =================
-st.markdown("<h2 style='text-align: center; color: white; margin-bottom: 2rem;'>✨ AI 创作工作室</h2>", unsafe_allow_html=True)
+# ================= 2. 侧边栏（模式与历史） =================
+with st.sidebar:
+    st.markdown("<h2 style='color:white;'>✨ AI Studio</h2>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("**当前模式**")
+    # 把选择器放在侧边栏，主页面保持纯净
+    mode = st.radio("Mode", ["🎬 图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
+    
+    st.markdown("---")
+    st.markdown("**清空对话**")
+    if st.button("新建对话 🗑️", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
-# 把模式选择放在主界面上，不需要侧边栏
-mode = st.radio(
-    "选择创作模式", 
-    ["🎬 图文短剧", "🎨 单张绘图"], 
-    horizontal=True, 
-    label_visibility="collapsed"
-)
+# ================= 3. 主界面对话流 =================
+st.markdown("<h2 style='text-align: center; color: white; margin-bottom: 2rem;'>✨ 让想象触手可及</h2>", unsafe_allow_html=True)
 
-# 初始化记忆状态
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -74,21 +102,22 @@ for msg in st.session_state.messages:
             cols = st.columns(3)
             for i, img in enumerate(msg["content"]):
                 with cols[i % 3]:
+                    # 彻底解决警告：使用 use_container_width
                     st.image(img["url"], caption=img["caption"], use_container_width=True)
 
 # 底部悬浮输入框
 user_input = st.chat_input("输入想法、剧本或画面描述，和 Agent 一起创作...")
 
 if user_input:
-    # 显示用户输入
+    # 记录用户输入
     st.session_state.messages.append({"role": "user", "type": "text", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI 工作区
+    # AI 处理逻辑
     with st.chat_message("assistant"):
         if mode == "🎨 单张绘图":
-            with st.spinner("正在绘制中..."):
+            with st.spinner("AI 正在绘制..."):
                 try:
                     api_key = os.getenv("ZHIPU_API_KEY").strip()
                     url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
@@ -124,8 +153,10 @@ if user_input:
                     st.error(f"剧本拆解失败：{e}")
                     st.stop()
 
-            st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头。")
+            st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头，正在生成画面...")
             
+            # 动态占位符，提升加载体验
+            placeholder = st.empty()
             cols = st.columns(3)
             images_data = []
             
@@ -146,7 +177,7 @@ if user_input:
                                 st.image(img_url, use_container_width=True)
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                         except Exception as e:
-                            pass
+                            pass # 忽略单张失败
             
             st.session_state.messages.append({
                 "role": "assistant", "type": "image_list", "content": images_data
