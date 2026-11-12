@@ -10,7 +10,6 @@ import dashscope
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# ================= 1. 页面配置与 CSS 注入 =================
 st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
 
 custom_css = """
@@ -43,12 +42,10 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# ================= 2. 初始化模型 =================
 load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
 
-# ================= 3. 多线程 TTS 函数 (防止云端报错) =================
 def run_tts_in_thread(text, filename):
     def target():
         async def _generate():
@@ -56,18 +53,15 @@ def run_tts_in_thread(text, filename):
             communicate = edge_tts.Communicate(text, voice)
             await communicate.save(filename)
         asyncio.run(_generate())
-    
     thread = threading.Thread(target=target)
     thread.start()
     thread.join()
 
-# ================= 4. 主界面逻辑 =================
 mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 渲染历史对话
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["type"] == "text":
@@ -82,7 +76,6 @@ for msg in st.session_state.messages:
         elif msg["type"] == "video":
             st.video(msg["content"])
 
-# 底部输入框
 user_input = st.chat_input("输入想法、剧本或画面描述，和 Agent 一起创作...")
 
 if user_input:
@@ -91,7 +84,6 @@ if user_input:
         st.markdown(user_input)
 
     with st.chat_message("assistant"):
-        # --- 模式 1：单张绘图 ---
         if mode == "🎨 单张绘图":
             with st.spinner("AI 正在绘制..."):
                 try:
@@ -110,7 +102,6 @@ if user_input:
                 except Exception as e:
                     st.error(f"生成失败：{e}")
                     
-        # --- 模式 2：有声图文短剧 ---
         elif mode == "🎬 有声图文短剧":
             with st.spinner("导演正在拆解剧本..."):
                 prompt = f"""你是一个电影分镜师。将剧本拆解为分镜。严格输出JSON数组：
@@ -151,7 +142,6 @@ if user_input:
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                                 
                                 st.markdown("---")
-                                # 【图生视频按钮】
                                 if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}", use_container_width=True):
                                     with st.spinner("视频生成中（约1-5分钟）..."):
                                         try:
@@ -174,7 +164,6 @@ if user_input:
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 处理失败：{e}")
             
-            # 配音生成
             if full_narration:
                 st.markdown("### 🎙️ AI 配音")
                 with st.spinner("正在合成沉浸式语音..."):
@@ -188,5 +177,4 @@ if user_input:
                         os.remove(audio_file)
                     except Exception as e:
                         st.error(f"配音生成失败：{e}")
-            
             st.session_state.messages.append({"role": "assistant", "type": "image_list", "content": images_data})
