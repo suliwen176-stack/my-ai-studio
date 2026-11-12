@@ -2,37 +2,30 @@ import streamlit as st
 import os
 import json
 import urllib.request
+import asyncio
+import edge_tts
+import nest_asyncio
+import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# ================= 1. 极致黑金 CSS 注入 =================
+# 解决 Streamlit 中不能直接使用 asyncio.run() 的问题
+nest_asyncio.apply()
+
+# ================= 1. 注入极简 CSS =================
 st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
 
 custom_css = """
 <style>
-    /* 暴力隐藏 Streamlit 所有的开发者痕迹 */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
-    [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
     
-    /* 纯黑背景 */
-    .stApp {
-        background-color: #050505;
-        color: #E0E0E0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
+    .stApp { background-color: #050505; color: #E0E0E0; }
+    .block-container { padding-top: 3rem; padding-bottom: 6rem; max-width: 800px; }
     
-    /* 主区域居中与边距 */
-    .block-container {
-        padding-top: 3rem;
-        padding-bottom: 6rem;
-        max-width: 800px;
-    }
-    
-    /* 悬浮输入框 */
     [data-testid="stChatInput"] {
         background-color: #141414 !important;
         border: 1px solid #2A2A2A !important;
@@ -40,57 +33,17 @@ custom_css = """
         padding: 12px 24px !important;
         color: white !important;
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.8) !important;
-        transition: all 0.3s ease;
     }
-    [data-testid="stChatInput"]:focus-within {
-        border-color: #555 !important;
-        box-shadow: 0 4px 40px rgba(255, 255, 255, 0.1) !important;
-    }
+    [data-testid="stChatMessage"] { background-color: transparent !important; border: none !important; }
+    .stImage img { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
     
-    /* 对话气泡美化 */
-    [data-testid="stChatMessage"] {
-        background-color: transparent !important;
-        padding: 10px 0 !important;
-        border: none !important;
-    }
-    
-    /* 图片圆角与阴影 */
-    .stImage img {
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-        transition: transform 0.3s ease;
-    }
-    .stImage img:hover {
-        transform: translateY(-2px);
-    }
-    
-    /* 把单选框 (Radio) 变成即梦同款的高级切换按钮 */
-    div[role="radiogroup"] {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 2rem;
-    }
-    div[role="radiogroup"] > label > div:first-child {
-        display: none; /* 隐藏默认圆圈 */
-    }
+    div[role="radiogroup"] { display: flex; justify-content: center; margin-bottom: 2rem; }
+    div[role="radiogroup"] > label > div:first-child { display: none; }
     div[role="radiogroup"] > label {
-        background-color: #141414;
-        padding: 8px 20px;
-        border-radius: 20px;
-        margin: 0 10px;
-        border: 1px solid #2A2A2A;
-        cursor: pointer;
-        transition: all 0.2s ease;
+        background-color: #141414; padding: 8px 20px; border-radius: 20px; margin: 0 10px;
+        border: 1px solid #2A2A2A; cursor: pointer;
     }
-    div[role="radiogroup"] > label:hover {
-        border-color: #555;
-    }
-    /* 选中状态的样式 */
-    div[role="radiogroup"] > label[data-checked="true"] {
-        background-color: #FFFFFF;
-        color: #000000;
-        border-color: #FFFFFF;
-    }
+    div[role="radiogroup"] > label[data-checked="true"] { background-color: #FFFFFF; color: #000; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -98,25 +51,26 @@ st.markdown(custom_css, unsafe_allow_html=True)
 load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 
-# ================= 2. 顶部控制栏 =================
-# 把模式切换居中，方便点击
-mode = st.radio("模式切换", ["🎬 图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
+# ================= 2. 语音生成函数 =================
+async def generate_audio(text, filename):
+    voice = "zh-CN-YunxiNeural" # 云希，非常自然的情感男声
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(filename)
 
-# 初始化记忆状态
+# ================= 3. 主界面 =================
+mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ================= 3. 主界面对话流 =================
-# 如果没对话，显示极简欢迎语
 if not st.session_state.messages:
     st.markdown("""
         <div style='text-align: center; margin-top: 10vh; margin-bottom: 10vh;'>
-            <h1 style='color: #FFFFFF; font-weight: 300; font-size: 2.5rem; letter-spacing: 2px;'>让想象触手可及</h1>
-            <p style='color: #888; font-size: 1.1rem;'>在下方输入您的想法，AI 将为您绘制画面</p>
+            <h1 style='color: #FFFFFF; font-weight: 300; font-size: 2.5rem;'>让想象触手可及</h1>
+            <p style='color: #888;'>在下方输入您的剧本，AI 将为您生成画面和配音</p>
         </div>
     """, unsafe_allow_html=True)
 
-# 渲染历史记录
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["type"] == "text":
@@ -126,8 +80,9 @@ for msg in st.session_state.messages:
             for i, img in enumerate(msg["content"]):
                 with cols[i % 3]:
                     st.image(img["url"], caption=img["caption"], use_container_width=True)
+        elif msg["type"] == "audio":
+            st.audio(msg["content"], format="audio/mp3")
 
-# 底部悬浮输入框
 user_input = st.chat_input("输入想法、剧本或画面描述，和 Agent 一起创作...")
 
 if user_input:
@@ -159,10 +114,10 @@ if user_input:
                 except Exception as e:
                     st.error(f"生成失败：{e}")
                     
-        elif mode == "🎬 图文短剧":
+        elif mode == "🎬 有声图文短剧":
             with st.spinner("导演正在拆解剧本..."):
                 prompt = f"""你是一个电影分镜师。将剧本拆解为分镜。严格输出JSON：
-                [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词"}}]
+                [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词或旁白"}}]
                 剧本：{user_input}"""
                 
                 try:
@@ -173,14 +128,18 @@ if user_input:
                     st.error(f"剧本拆解失败：{e}")
                     st.stop()
 
-            st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头，正在生成画面...")
+            st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头，正在生成...")
             
             cols = st.columns(3)
             images_data = []
+            full_narration = "" 
             
             for i, shot in enumerate(storyboard):
                 with cols[i % 3]:
                     st.caption(f"镜头 {shot['shot_id']}: {shot.get('dialogue', '')}")
+                    if shot.get('dialogue'):
+                        full_narration += shot.get('dialogue') + "。"
+                        
                     with st.spinner("绘制中..."):
                         try:
                             api_key = os.getenv("ZHIPU_API_KEY").strip()
@@ -197,6 +156,23 @@ if user_input:
                         except Exception as e:
                             pass
             
+            # 生成配音
+            if full_narration:
+                st.markdown("### 🎙️ AI 配音")
+                with st.spinner("正在合成沉浸式语音..."):
+                    audio_file = f"tts_{int(time.time())}.mp3"
+                    try:
+                        # 使用 nest_asyncio 后可以安全调用
+                        asyncio.run(generate_audio(full_narration, audio_file))
+                        
+                        with open(audio_file, "rb") as f:
+                            audio_bytes = f.read()
+                            st.audio(audio_bytes, format="audio/mp3")
+                            st.session_state.messages.append({"role": "assistant", "type": "audio", "content": audio_bytes})
+                        os.remove(audio_file)
+                    except Exception as e:
+                        st.error(f"配音生成失败：{e}")
+
             st.session_state.messages.append({
                 "role": "assistant", "type": "image_list", "content": images_data
             })
