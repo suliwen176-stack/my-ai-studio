@@ -11,10 +11,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 nest_asyncio.apply()
-
 st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
 
-# ================= 1. 注入极简 CSS =================
 custom_css = """
 <style>
     #MainMenu {visibility: hidden;}
@@ -22,10 +20,8 @@ custom_css = """
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
-    
     .stApp { background-color: #050505; color: #E0E0E0; }
     .block-container { padding-top: 3rem; padding-bottom: 6rem; max-width: 800px; }
-    
     [data-testid="stChatInput"] {
         background-color: #141414 !important;
         border: 1px solid #2A2A2A !important;
@@ -36,7 +32,6 @@ custom_css = """
     }
     [data-testid="stChatMessage"] { background-color: transparent !important; border: none !important; }
     .stImage img { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
-    
     div[role="radiogroup"] { display: flex; justify-content: center; margin-bottom: 2rem; }
     div[role="radiogroup"] > label > div:first-child { display: none; }
     div[role="radiogroup"] > label {
@@ -62,7 +57,6 @@ mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"]
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 渲染历史记录
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["type"] == "text":
@@ -97,14 +91,9 @@ if user_input:
                     with urllib.request.urlopen(req) as response:
                         result = json.loads(response.read().decode('utf-8'))
                         img_url = result['data'][0]['url']
-                        
                         st.image(img_url, use_container_width=True)
                         st.markdown(f"**[📥 点击下载原图]({img_url})**")
-                        
-                        st.session_state.messages.append({
-                            "role": "assistant", "type": "image_list", 
-                            "content": [{"url": img_url, "caption": user_input}]
-                        })
+                        st.session_state.messages.append({"role": "assistant", "type": "image_list", "content": [{"url": img_url, "caption": user_input}]})
                 except Exception as e:
                     st.error(f"生成失败：{e}")
                     
@@ -112,9 +101,7 @@ if user_input:
             with st.spinner("导演正在拆解剧本..."):
                 prompt = f"""你是一个电影分镜师。将剧本拆解为分镜。严格输出JSON数组：
                 [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词或旁白"}}]
-                如果剧本极短（如少于10个字），请自行补充合理的画面和旁白。
                 剧本：{user_input}"""
-                
                 try:
                     res = client_chat.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}])
                     clean_json = res.choices[0].message.content.replace("```json", "").replace("```", "").strip()
@@ -125,7 +112,6 @@ if user_input:
 
             st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头。")
             
-            # 渲染分镜和视频生成按钮
             cols = st.columns(3)
             images_data = []
             full_narration = ""
@@ -150,7 +136,6 @@ if user_input:
                                 st.image(img_url, use_container_width=True)
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                                 
-                                # --- 核心：让镜头动起来 ---
                                 st.markdown("---")
                                 if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}", use_container_width=True):
                                     with st.spinner("视频生成中（约1-5分钟）..."):
@@ -174,7 +159,6 @@ if user_input:
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 处理失败：{e}")
             
-            # 配音生成
             if full_narration:
                 st.markdown("### 🎙️ AI 配音")
                 with st.spinner("正在合成沉浸式语音..."):
@@ -188,5 +172,4 @@ if user_input:
                         os.remove(audio_file)
                     except Exception as e:
                         st.error(f"配音生成失败：{e}")
-
             st.session_state.messages.append({"role": "assistant", "type": "image_list", "content": images_data})
