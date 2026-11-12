@@ -10,11 +10,11 @@ import dashscope
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# 解决 Streamlit 中 asyncio.run() 的问题
 nest_asyncio.apply()
 
-# ================= 1. CSS 注入（保持不变） =================
 st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
+
+# ================= 1. 注入极简 CSS =================
 custom_css = """
 <style>
     #MainMenu {visibility: hidden;}
@@ -22,8 +22,10 @@ custom_css = """
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
+    
     .stApp { background-color: #050505; color: #E0E0E0; }
     .block-container { padding-top: 3rem; padding-bottom: 6rem; max-width: 800px; }
+    
     [data-testid="stChatInput"] {
         background-color: #141414 !important;
         border: 1px solid #2A2A2A !important;
@@ -34,6 +36,7 @@ custom_css = """
     }
     [data-testid="stChatMessage"] { background-color: transparent !important; border: none !important; }
     .stImage img { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+    
     div[role="radiogroup"] { display: flex; justify-content: center; margin-bottom: 2rem; }
     div[role="radiogroup"] > label > div:first-child { display: none; }
     div[role="radiogroup"] > label {
@@ -49,13 +52,11 @@ load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
 
-# ================= 2. 语音生成函数 =================
 async def generate_audio(text, filename):
     voice = "zh-CN-YunxiNeural"
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(filename)
 
-# ================= 3. 主界面 =================
 mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
 
 if "messages" not in st.session_state:
@@ -92,13 +93,33 @@ if user_input:
 
     with st.chat_message("assistant"):
         if mode == "🎨 单张绘图":
-            # 单张绘图逻辑（保持不变）
-            st.info("单张绘图逻辑保留不变")
+            with st.spinner("AI 正在绘制..."):
+                try:
+                    api_key = os.getenv("ZHIPU_API_KEY").strip()
+                    url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
+                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                    payload = {"model": "cogview-3-flash", "prompt": user_input}
+                    
+                    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+                    with urllib.request.urlopen(req) as response:
+                        result = json.loads(response.read().decode('utf-8'))
+                        img_url = result['data'][0]['url']
+                        
+                        st.image(img_url, use_container_width=True)
+                        st.markdown(f"**[📥 点击下载原图]({img_url})**")
+                        
+                        st.session_state.messages.append({
+                            "role": "assistant", "type": "image_list", 
+                            "content": [{"url": img_url, "caption": user_input}]
+                        })
+                except Exception as e:
+                    st.error(f"生成失败：{e}")
                     
         elif mode == "🎬 有声图文短剧":
             with st.spinner("导演正在拆解剧本..."):
-                prompt = f"""你是一个电影分镜师。将剧本拆解为分镜。严格输出JSON：
+                prompt = f"""你是一个电影分镜师。将剧本拆解为分镜。严格输出JSON数组：
                 [{{"shot_id": 1, "visual_prompt": "英文画面描述", "dialogue": "台词或旁白"}}]
+                如果剧本极短（如少于10个字），请自行补充合理的画面和旁白。
                 剧本：{user_input}"""
                 
                 try:
@@ -123,7 +144,6 @@ if user_input:
                         
                     with st.spinner("绘制中..."):
                         try:
-                            # --- 先生成图片 ---
                             api_key = os.getenv("ZHIPU_API_KEY").strip()
                             url = "https://open.bigmodel.cn/api/paas/v4/images/generations"
                             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -136,12 +156,11 @@ if user_input:
                                 st.image(img_url, use_container_width=True)
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                                 
-                                # --- 新增：基于图片生成视频 ---
+                                # --- 图生视频按钮 ---
                                 st.markdown("---")
                                 if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}"):
                                     with st.spinner("视频生成中（约1-5分钟）..."):
                                         try:
-                                            # 使用 wan2.6-i2v-flash 同步调用
                                             job = dashscope.videos.generate(
                                                 model='wan2.6-i2v-flash',
                                                 prompt=shot['visual_prompt'],
@@ -161,7 +180,6 @@ if user_input:
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 处理失败：{e}")
             
-            # --- 生成配音（原有逻辑） ---
             if full_narration:
                 st.markdown("### 🎙️ AI 配音")
                 with st.spinner("正在合成沉浸式语音..."):
