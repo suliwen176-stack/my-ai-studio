@@ -62,14 +62,7 @@ mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"]
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if not st.session_state.messages:
-    st.markdown("""
-        <div style='text-align: center; margin-top: 10vh; margin-bottom: 10vh;'>
-            <h1 style='color: #FFFFFF; font-weight: 300; font-size: 2.5rem;'>让想象触手可及</h1>
-            <p style='color: #888;'>在下方输入您的剧本，AI 将为您生成画面和配音</p>
-        </div>
-    """, unsafe_allow_html=True)
-
+# 渲染历史记录
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["type"] == "text":
@@ -132,6 +125,7 @@ if user_input:
 
             st.markdown(f"✅ 拆解完毕！共 {len(storyboard)} 个镜头。")
             
+            # 渲染分镜和视频生成按钮
             cols = st.columns(3)
             images_data = []
             full_narration = ""
@@ -156,9 +150,9 @@ if user_input:
                                 st.image(img_url, use_container_width=True)
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                                 
-                                # --- 图生视频按钮 ---
+                                # --- 核心：让镜头动起来 ---
                                 st.markdown("---")
-                                if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}"):
+                                if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}", use_container_width=True):
                                     with st.spinner("视频生成中（约1-5分钟）..."):
                                         try:
                                             job = dashscope.videos.generate(
@@ -180,6 +174,7 @@ if user_input:
                         except Exception as e:
                             st.error(f"镜头 {shot['shot_id']} 处理失败：{e}")
             
+            # 配音生成
             if full_narration:
                 st.markdown("### 🎙️ AI 配音")
                 with st.spinner("正在合成沉浸式语音..."):
