@@ -4,3 +4,4 @@ openai
 requests
 edge-tts
 nest_asyncio
+dashscope
