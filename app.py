@@ -3,14 +3,13 @@ import os
 import json
 import urllib.request
 import asyncio
+import threading
 import edge_tts
-import nest_asyncio
 import time
 import dashscope
 from openai import OpenAI
 from dotenv import load_dotenv
 
-nest_asyncio.apply()
 st.set_page_config(page_title="AI 创作工作室", page_icon="✨", layout="centered")
 
 custom_css = """
@@ -47,10 +46,16 @@ load_dotenv()
 client_chat = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
 
-async def generate_audio(text, filename):
-    voice = "zh-CN-YunxiNeural"
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(filename)
+def run_tts_in_thread(text, filename):
+    def target():
+        async def _generate():
+            voice = "zh-CN-YunxiNeural"
+            communicate = edge_tts.Communicate(text, voice)
+            await communicate.save(filename)
+        asyncio.run(_generate())
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join()
 
 mode = st.radio("模式切换", ["🎬 有声图文短剧", "🎨 单张绘图"], label_visibility="collapsed")
 
@@ -65,7 +70,6 @@ for msg in st.session_state.messages:
             cols = st.columns(3)
             for i, img in enumerate(msg["content"]):
                 with cols[i % 3]:
-                    # 【已彻底移除废弃警告】使用最新的 API 参数
                     st.image(img["url"], caption=img["caption"], use_container_width=True)
         elif msg["type"] == "audio":
             st.audio(msg["content"], format="audio/mp3")
@@ -138,6 +142,7 @@ if user_input:
                                 images_data.append({"url": img_url, "caption": shot['dialogue']})
                                 
                                 st.markdown("---")
+                                # 【这里就是你梦寐以求的按钮！】
                                 if st.button(f"🎬 让镜头 {shot['shot_id']} 动起来", key=f"video_{i}", use_container_width=True):
                                     with st.spinner("视频生成中（约1-5分钟）..."):
                                         try:
@@ -165,7 +170,7 @@ if user_input:
                 with st.spinner("正在合成沉浸式语音..."):
                     audio_file = f"tts_{int(time.time())}.mp3"
                     try:
-                        asyncio.run(generate_audio(full_narration, audio_file))
+                        run_tts_in_thread(full_narration, audio_file)
                         with open(audio_file, "rb") as f:
                             audio_bytes = f.read()
                             st.audio(audio_bytes, format="audio/mp3")
