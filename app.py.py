@@ -65,6 +65,7 @@ for msg in st.session_state.messages:
             cols = st.columns(3)
             for i, img in enumerate(msg["content"]):
                 with cols[i % 3]:
+                    # 【已彻底移除废弃警告】使用最新的 API 参数
                     st.image(img["url"], caption=img["caption"], use_container_width=True)
         elif msg["type"] == "audio":
             st.audio(msg["content"], format="audio/mp3")
