@@ -355,9 +355,10 @@ mode = st.radio(
     horizontal=True,
     label_visibility="collapsed"
 )
-# 在页面顶部展示你生成的视频
-st.markdown("### 🎬 最新生成的 AI 视频")
-st.video("my_video.mp4") 
+# ================= 视频上传与播放 =================
+uploaded_video = st.file_uploader("请选择你生成的 MP4 视频文件", type=["mp4", "mov", "avi"])
+if uploaded_video is not None:
+    st.video(uploaded_video)
 
 # =====================================================
 # 9. 渲染历史消息
