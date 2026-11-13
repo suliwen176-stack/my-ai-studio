@@ -355,7 +355,9 @@ mode = st.radio(
     horizontal=True,
     label_visibility="collapsed"
 )
-
+# 在页面顶部展示你生成的视频
+st.markdown("### 🎬 最新生成的 AI 视频")
+st.video("my_video.mp4") 
 
 # =====================================================
 # 9. 渲染历史消息
