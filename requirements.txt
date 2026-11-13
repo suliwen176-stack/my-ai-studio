@@ -1,7 +1,6 @@
-streamlit
-python-dotenv
-openai
-requests
-edge-tts
-nest_asyncio
-dashscope
+
+streamlit>=1.48.0
+openai>=1.30.0
+dashscope>=2.0.1
+edge-tts>=6.1.0
+python-dotenv>=1.0.0
